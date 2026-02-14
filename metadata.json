@@ -1,0 +1,5 @@
+{
+  "name": "Noveily",
+  "description": "A smart reader for your comics and visual novels. Upload, organize, and read on any device, with Gemini-powered page analysis to translate or explain complex panels.",
+  "requestFramePermissions": []
+}
