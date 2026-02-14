@@ -13,6 +13,7 @@ interface CoverEditorProps {
 
 const CoverEditor: React.FC<CoverEditorProps> = ({ comic, onClose, showToast }) => {
   const [image, setImage] = useState<string | null>(null);
+  const [imageSource, setImageSource] = useState<Blob | File | null>(null);
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -26,16 +27,29 @@ const CoverEditor: React.FC<CoverEditorProps> = ({ comic, onClose, showToast }) 
 
   useEffect(() => {
     if (comic.coverImageBlob) {
-      const url = URL.createObjectURL(comic.coverImageBlob);
-      setImage(url);
-      return () => URL.revokeObjectURL(url);
+      setImageSource(comic.coverImageBlob);
     }
   }, [comic.coverImageBlob]);
+  
+  useEffect(() => {
+    let url: string | null = null;
+    if (imageSource) {
+      url = URL.createObjectURL(imageSource);
+      setImage(url);
+    } else {
+      setImage(null);
+    }
+    
+    return () => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [imageSource]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const url = URL.createObjectURL(e.target.files[0]);
-      setImage(url);
+      setImageSource(e.target.files[0]);
       setZoom(1);
       setRotation(0);
       setPosition({ x: 0, y: 0 });
@@ -63,39 +77,64 @@ const CoverEditor: React.FC<CoverEditorProps> = ({ comic, onClose, showToast }) 
     setLoading(true);
 
     try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      const finalCanvas = document.createElement('canvas');
+      const finalCtx = finalCanvas.getContext('2d');
+      if (!finalCtx) {
+        throw new Error('Could not get canvas context');
+      }
 
-      // Desired aspect ratio 2:3, output size e.g. 600x900
-      const width = 600;
-      const height = 900;
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw image onto canvas based on transform
+      const targetWidth = 600;
+      const targetHeight = 900;
+      finalCanvas.width = targetWidth;
+      finalCanvas.height = targetHeight;
+      
+      const container = containerRef.current;
       const img = imageRef.current;
-      const cropBox = containerRef.current.getBoundingClientRect();
-      const imgBox = img.getBoundingClientRect();
 
-      // Relative coordinates
-      const scaleX = img.naturalWidth / imgBox.width;
-      const scaleY = img.naturalHeight / imgBox.height;
+      // The render scale is the ratio of our target canvas size to the displayed container size
+      const renderScale = targetWidth / container.offsetWidth;
 
-      const offsetX = (cropBox.left - imgBox.left) * scaleX;
-      const offsetY = (cropBox.top - imgBox.top) * scaleY;
-      const dw = cropBox.width * scaleX;
-      const dh = cropBox.height * scaleY;
+      // We apply transformations to the context to mimic the CSS transformations on the image
+      // 1. Move canvas origin to its center
+      finalCtx.translate(targetWidth / 2, targetHeight / 2);
+      
+      // 2. Apply user's panning (position)
+      finalCtx.translate(position.x * renderScale, position.y * renderScale);
+      
+      // 3. Apply user's rotation
+      finalCtx.rotate(rotation * Math.PI / 180);
+      
+      // 4. Apply user's zoom
+      finalCtx.scale(zoom, zoom);
+      
+      // Now, we need to draw the image. Its base size (before zoom) should cover the container.
+      const imgAspectRatio = img.naturalWidth / img.naturalHeight;
+      const containerAspectRatio = container.offsetWidth / container.offsetHeight;
+      
+      let scaledDrawWidth, scaledDrawHeight;
+      
+      // This logic determines if the image should fit by width or height to cover the container
+      if (imgAspectRatio > containerAspectRatio) {
+          scaledDrawHeight = container.offsetHeight * renderScale;
+          scaledDrawWidth = scaledDrawHeight * imgAspectRatio;
+      } else {
+          scaledDrawWidth = container.offsetWidth * renderScale;
+          scaledDrawHeight = scaledDrawWidth / imgAspectRatio;
+      }
 
-      ctx.drawImage(img, offsetX, offsetY, dw, dh, 0, 0, width, height);
+      // Draw the image centered on the transformed context
+      finalCtx.drawImage(img, -scaledDrawWidth / 2, -scaledDrawHeight / 2, scaledDrawWidth, scaledDrawHeight);
 
-      canvas.toBlob(async (blob) => {
+      finalCanvas.toBlob(async (blob) => {
         if (blob) {
           await updateComicCover(comic.id, blob);
           showToast(t('library.toast.titleUpdated'), 'success');
           onClose();
+        } else {
+            throw new Error('Canvas toBlob returned null');
         }
       }, 'image/jpeg', 0.9);
+
     } catch (error) {
       console.error("Save cover error:", error);
       showToast(t('library.toast.titleUpdateFailed'), 'error');
@@ -135,6 +174,10 @@ const CoverEditor: React.FC<CoverEditorProps> = ({ comic, onClose, showToast }) 
               style={{
                 transform: `translate(${position.x}px, ${position.y}px) scale(${zoom}) rotate(${rotation}deg)`,
                 transformOrigin: 'center center',
+                // Ensure image covers the container initially
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover'
               }}
             />
           ) : (

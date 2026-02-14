@@ -11,6 +11,31 @@ interface ReaderProps {
   onClose: () => void;
 }
 
+// Memoized component to display a single page image, handling its own blob URL lifecycle to prevent memory leaks.
+const ReaderPageImage: React.FC<{ page: ComicPage }> = React.memo(({ page }) => {
+    const [imageUrl, setImageUrl] = useState('');
+
+    useEffect(() => {
+        if (page.blob) {
+            const url = URL.createObjectURL(page.blob);
+            setImageUrl(url);
+            return () => URL.revokeObjectURL(url);
+        }
+    }, [page.blob]);
+
+    if (!imageUrl) return <div className="w-full min-h-[50vh] bg-black/20" />; // Placeholder for aspect ratio
+
+    return (
+        <img
+            src={imageUrl}
+            alt={`Page ${page.order + 1}`}
+            className="max-w-full h-auto object-contain"
+            loading="lazy"
+        />
+    );
+});
+
+
 const Reader: React.FC<ReaderProps> = ({ comic, onClose }) => {
   const [pages, setPages] = useState<ComicPage[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(comic.lastReadPage || 0);
@@ -171,13 +196,7 @@ const Reader: React.FC<ReaderProps> = ({ comic, onClose }) => {
                 data-index={idx}
                 className="w-full flex justify-center py-1"
               >
-                <img 
-                  src={URL.createObjectURL(page.blob)} 
-                  alt={`Page ${idx + 1}`} 
-                  className="max-w-full h-auto object-contain"
-                  loading="lazy"
-                  onLoad={(e) => URL.revokeObjectURL(e.currentTarget.src)}
-                />
+                <ReaderPageImage page={page} />
               </div>
             ))}
           </div>

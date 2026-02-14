@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, X, Loader2, Plus, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { saveComic } from '../utils/db';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,6 +12,43 @@ interface UploaderProps {
   onCancel: () => void;
   showToast: (message: string, type: ToastMessage['type']) => void;
 }
+
+// Component to safely manage blob URL for the cover preview
+const CoverPreview: React.FC<{ file: File }> = ({ file }) => {
+  const [imageUrl, setImageUrl] = useState('');
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setImageUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return <img src={imageUrl} alt="Cover preview" className="w-full h-full object-cover" />;
+};
+
+// Component to safely manage blob URLs for page previews in the list
+const PagePreview: React.FC<{ file: File; onRemove: () => void; index: number }> = ({ file, onRemove, index }) => {
+    const [imageUrl, setImageUrl] = useState('');
+    useEffect(() => {
+        const url = URL.createObjectURL(file);
+        setImageUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [file]);
+
+    return (
+        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-white/5 border border-white/10 shadow-lg">
+            <img src={imageUrl} alt={`Page ${index + 1}`} className="w-full h-full object-cover" />
+            <button
+                type="button"
+                onClick={onRemove}
+                className="absolute top-1.5 right-1.5 p-1 bg-red-500/80 rounded-full text-white active:bg-red-600 transition-colors z-10"
+            >
+                <X size={14} />
+            </button>
+            <span className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-md border border-white/10 text-[10px] px-2 py-0.5 rounded-md text-white font-mono">
+                {index + 1}
+            </span>
+        </div>
+    );
+};
 
 const Uploader: React.FC<UploaderProps> = ({ onUploadComplete, onCancel, showToast }) => {
   const [title, setTitle] = useState('');
@@ -159,7 +196,7 @@ const Uploader: React.FC<UploaderProps> = ({ onUploadComplete, onCancel, showToa
                 </label>
                 {coverFile && (
                   <div className="w-16 h-20 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
-                    <img src={URL.createObjectURL(coverFile)} alt="Cover preview" className="w-full h-full object-cover" onLoad={(e) => URL.revokeObjectURL(e.currentTarget.src)} />
+                    <CoverPreview file={coverFile} />
                   </div>
                 )}
               </div>
@@ -201,24 +238,7 @@ const Uploader: React.FC<UploaderProps> = ({ onUploadComplete, onCancel, showToa
               ) : (
                 <div className="h-full overflow-y-auto p-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 content-start no-scrollbar">
                   {files.map((file, idx) => (
-                    <div key={idx} className="relative aspect-[2/3] rounded-xl overflow-hidden bg-white/5 border border-white/10 shadow-lg">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`Page ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                        onLoad={(e) => URL.revokeObjectURL(e.currentTarget.src)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeFile(idx)}
-                        className="absolute top-1.5 right-1.5 p-1 bg-red-500/80 rounded-full text-white active:bg-red-600 transition-colors z-10"
-                      >
-                        <X size={14} />
-                      </button>
-                      <span className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-md border border-white/10 text-[10px] px-2 py-0.5 rounded-md text-white font-mono">
-                        {idx + 1}
-                      </span>
-                    </div>
+                    <PagePreview key={`${file.name}-${idx}`} file={file} index={idx} onRemove={() => removeFile(idx)} />
                   ))}
                 </div>
               )}

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, Trash2 } from 'lucide-react';
 import { Comic, ComicPage } from '../types';
@@ -9,6 +10,35 @@ interface EditorProps {
   onClose: () => void;
   showToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
+
+// Component to safely manage blob URLs for page previews in the editor
+const EditorPagePreview: React.FC<{ page: ComicPage; onDelete: () => void }> = ({ page, onDelete }) => {
+    const [imageUrl, setImageUrl] = useState('');
+    useEffect(() => {
+        const url = URL.createObjectURL(page.blob);
+        setImageUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [page.blob]);
+
+    return (
+        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-white/5 border border-white/10 shadow-lg group">
+            <img src={imageUrl} alt={`Page ${page.order + 1}`} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    className="p-3 bg-red-500/80 rounded-full text-white active:bg-red-600 transition-colors z-10"
+                    aria-label="Delete page"
+                >
+                    <Trash2 size={20} />
+                </button>
+            </div>
+            <span className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-md border border-white/10 text-[10px] px-2 py-0.5 rounded-md text-white font-mono">
+                {page.order + 1}
+            </span>
+        </div>
+    );
+};
 
 const Editor: React.FC<EditorProps> = ({ comic, onClose, showToast }) => {
   const [pages, setPages] = useState<ComicPage[]>([]);
@@ -79,28 +109,8 @@ const Editor: React.FC<EditorProps> = ({ comic, onClose, showToast }) => {
             </div>
           ) : (
             <div className="h-full overflow-y-auto p-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 content-start no-scrollbar">
-              {pages.map((page, idx) => (
-                <div key={page.id} className="relative aspect-[2/3] rounded-xl overflow-hidden bg-white/5 border border-white/10 shadow-lg group">
-                  <img
-                    src={URL.createObjectURL(page.blob)}
-                    alt={`Page ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                    onLoad={(e) => URL.revokeObjectURL(e.currentTarget.src)}
-                  />
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button
-                      type="button"
-                      onClick={() => handleDeletePage(page.id)}
-                      className="p-3 bg-red-500/80 rounded-full text-white active:bg-red-600 transition-colors z-10"
-                      aria-label="Delete page"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                  <span className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-md border border-white/10 text-[10px] px-2 py-0.5 rounded-md text-white font-mono">
-                    {idx + 1}
-                  </span>
-                </div>
+              {pages.map((page) => (
+                <EditorPagePreview key={page.id} page={page} onDelete={() => handleDeletePage(page.id)} />
               ))}
             </div>
           )}

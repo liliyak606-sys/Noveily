@@ -104,16 +104,20 @@ export const searchComicCovers = async (comics: Comic[], query: string): Promise
     // Then, search the rest via AI
     const comicsToSearchAi = comics.filter(comic => !titleMatchIds.has(comic.id));
 
+    if (comicsToSearchAi.length === 0) {
+        return titleMatches;
+    }
+
+    // FIX: Create one AI instance for the entire search operation to improve performance.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
     const aiMatchPromises = comicsToSearchAi.map(async (comic) => {
         if (comic.coverImageBlob) {
             try {
-                // FIX: Fresh instance right before call for each request
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const base64Data = await blobToBase64(comic.coverImageBlob);
                 const prompt = `Does the cover of this comic book match the description "${query}"? The cover might show characters, scenes, or represent the mood. Answer with only "YES" or "NO".`;
 
                 const response = await ai.models.generateContent({
-                    // FIX: Using gemini-3-pro-preview for multimodal search verification
                     model: 'gemini-3-pro-preview',
                     contents: { parts: [{ inlineData: { data: base64Data, mimeType: comic.coverImageBlob.type || 'image/png' } }, { text: prompt }] },
                 });

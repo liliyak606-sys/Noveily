@@ -14,6 +14,27 @@ interface LibraryProps {
   showToast: (message: string, type: ToastMessage['type']) => void;
 }
 
+// A component to safely handle Blob URLs to prevent memory leaks
+const ComicCoverImage: React.FC<{ blob: Blob | null, alt: string, className: string }> = ({ blob, alt, className }) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (blob instanceof Blob) {
+      const url = URL.createObjectURL(blob);
+      setImageUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setImageUrl(null);
+  }, [blob]);
+
+  if (!imageUrl) {
+    return <div className="w-full h-full flex items-center justify-center text-white/30">No Cover</div>;
+  }
+
+  return <img src={imageUrl} alt={alt} className={className} loading="lazy" />;
+};
+
+
 const Library: React.FC<LibraryProps> = ({ onOpenReader, onOpenUploader, onOpenEditor, onOpenCoverEditor, showToast }) => {
   const [comics, setComics] = useState<Comic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,8 +85,10 @@ const Library: React.FC<LibraryProps> = ({ onOpenReader, onOpenUploader, onOpenE
   
   const filteredComics = useMemo(() => {
     if (!searchQuery) return comics;
-    const lowerCaseQuery = searchQuery.toLowerCase();
-    return comics.filter(comic => comic.title.toLowerCase().includes(lowerCaseQuery));
+    // For AI search results, we don't need to filter again.
+    // We assume the results are what the user wants to see.
+    // The regular text search is implicitly handled by `handleAiSearch` which starts from the full list.
+    return comics;
   }, [comics, searchQuery]);
 
   const handleDeleteClick = (e: React.MouseEvent, comic: Comic) => {
@@ -91,7 +114,8 @@ const Library: React.FC<LibraryProps> = ({ onOpenReader, onOpenUploader, onOpenE
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     try {
-      const results = await searchComicCovers(comics, searchQuery);
+      const fullLibrary = await getAllComics(); // Search on the full library
+      const results = await searchComicCovers(fullLibrary, searchQuery);
        setComics(results); 
        if(results.length === 0) {
         showToast(t('library.toast.aiSearchNotFound'), "info");
@@ -228,11 +252,11 @@ const Library: React.FC<LibraryProps> = ({ onOpenReader, onOpenUploader, onOpenE
               <div key={comic.id} className="group relative flex flex-col bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden transition-all shadow-xl duration-300">
                 <div onClick={() => onOpenReader(comic)} className="cursor-pointer">
                   <div className="aspect-[2/3] w-full bg-black/20 relative overflow-hidden">
-                    {comic.coverImageBlob ? (
-                      <img src={URL.createObjectURL(comic.coverImageBlob)} alt={comic.title} className="w-full h-full object-cover transition-transform duration-700" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/30">No Cover</div>
-                    )}
+                    <ComicCoverImage 
+                      blob={comic.coverImageBlob} 
+                      alt={comic.title} 
+                      className="w-full h-full object-cover transition-transform duration-700"
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60" />
                     {progress > 0 && progress < 100 && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 backdrop-blur-sm"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{width: `${progress}%`}} /></div>
