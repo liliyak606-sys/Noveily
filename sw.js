@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noveily-cache-v1';
+const CACHE_NAME = 'noveily-cache-v7';
 const urlsToCache = [
   '/',
   '/index.html',
