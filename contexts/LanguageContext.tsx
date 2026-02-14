@@ -29,8 +29,8 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     const loadTranslations = async () => {
       try {
         const [enResponse, ruResponse] = await Promise.all([
-          fetch('locales/en.json'),
-          fetch('locales/ru.json')
+          fetch('/locales/en.json'),
+          fetch('/locales/ru.json')
         ]);
         const enData = await enResponse.json();
         const ruData = await ruResponse.json();
