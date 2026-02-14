@@ -1,4 +1,5 @@
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+
+import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback, useMemo } from 'react';
 
 export type Language = 'en' | 'ru';
 
@@ -10,6 +11,7 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (language: Language) => void;
   t: (key: string, params?: { [key: string]: string | number }) => string;
+  isLoaded: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -17,6 +19,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
   const [translations, setTranslations] = useState<{ [key in Language]?: Translations }>({});
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const savedLang = localStorage.getItem('noveily-lang') as Language | null;
@@ -27,25 +30,27 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     const loadTranslations = async () => {
       try {
         const [enResponse, ruResponse] = await Promise.all([
-          fetch('/locales/en.json'),
-          fetch('/locales/ru.json')
+          fetch('locales/en.json'),
+          fetch('locales/ru.json')
         ]);
         const enData = await enResponse.json();
         const ruData = await ruResponse.json();
         setTranslations({ en: enData, ru: ruData });
       } catch (error) {
         console.error("Failed to load translations:", error);
+      } finally {
+        setIsLoaded(true);
       }
     };
     loadTranslations();
   }, []);
 
-  const setLanguage = (lang: Language) => {
+  const setLanguage = useCallback((lang: Language) => {
     localStorage.setItem('noveily-lang', lang);
     setLanguageState(lang);
-  };
+  }, []);
 
-  const t = (key: string, params?: { [key: string]: string | number }): string => {
+  const t = useCallback((key: string, params?: { [key: string]: string | number }): string => {
     const langTranslations = translations[language];
     if (!langTranslations || Object.keys(langTranslations).length === 0) {
       return key;
@@ -59,10 +64,12 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
         });
     }
     return translation;
-  };
+  }, [language, translations]);
+
+  const value = useMemo(() => ({ language, setLanguage, t, isLoaded }), [language, setLanguage, t, isLoaded]);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

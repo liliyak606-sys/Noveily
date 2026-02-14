@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Library from './components/Library';
 import Reader from './components/Reader';
 import Uploader from './components/Uploader';
@@ -9,22 +9,23 @@ import SplashScreen from './components/SplashScreen';
 import { ToastContainer } from './components/Toast';
 import { Comic, ViewState, ToastMessage } from './types';
 import { v4 as uuidv4 } from 'uuid';
-import { LanguageProvider } from './contexts/LanguageContext';
+import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import LanguageSelectionScreen from './components/LanguageSelectionScreen';
 import Onboarding from './components/Onboarding';
 
 const AppContent: React.FC = () => {
+  const { isLoaded: isLangLoaded } = useLanguage();
   const [view, setView] = useState<ViewState>('LIBRARY');
   const [activeComic, setActiveComic] = useState<Comic | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [showLangSelection, setShowLangSelection] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSplashFinished, setIsSplashFinished] = useState(false);
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(registration => {
+        navigator.serviceWorker.register('sw.js').then(registration => {
           console.log('SW registered: ', registration);
         }).catch(registrationError => {
           console.log('SW registration failed: ', registrationError);
@@ -34,17 +35,19 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const langIsSet = localStorage.getItem('noveily-lang');
-    if (!langIsSet) {
-      setShowLangSelection(true);
-      return; 
-    }
+    if (isSplashFinished && isLangLoaded) {
+      const langIsSet = localStorage.getItem('noveily-lang');
+      if (!langIsSet) {
+        setShowLangSelection(true);
+        return; 
+      }
 
-    const onboardingComplete = localStorage.getItem('noveily-onboarding-complete');
-    if (!onboardingComplete) {
-      setShowOnboarding(true);
+      const onboardingComplete = localStorage.getItem('noveily-onboarding-complete');
+      if (!onboardingComplete) {
+        setShowOnboarding(true);
+      }
     }
-  }, []);
+  }, [isSplashFinished, isLangLoaded]);
 
   const showToast = (message: string, type: ToastMessage['type'] = 'success') => {
       const id = uuidv4();
@@ -96,8 +99,12 @@ const AppContent: React.FC = () => {
     setShowOnboarding(false);
   };
 
-  if (isInitialLoading) {
-    return <SplashScreen onFinish={() => setIsInitialLoading(false)} />;
+  const handleSplashFinish = useCallback(() => {
+    setIsSplashFinished(true);
+  }, []);
+
+  if (!isSplashFinished || !isLangLoaded) {
+    return <SplashScreen onFinish={handleSplashFinish} />;
   }
 
   if (showLangSelection) {
