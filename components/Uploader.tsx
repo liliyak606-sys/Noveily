@@ -1,20 +1,24 @@
 
 import React, { useState } from 'react';
-import { Upload, X, Loader2, Plus, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Loader2, Plus, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { saveComic } from '../utils/db';
 import { v4 as uuidv4 } from 'uuid';
 import { useLanguage } from '../contexts/LanguageContext';
+import { generateAiTitle } from '../services/geminiService';
+import { ToastMessage } from '../types';
 
 interface UploaderProps {
   onUploadComplete: (message: string) => void;
   onCancel: () => void;
+  showToast: (message: string, type: ToastMessage['type']) => void;
 }
 
-const Uploader: React.FC<UploaderProps> = ({ onUploadComplete, onCancel }) => {
+const Uploader: React.FC<UploaderProps> = ({ onUploadComplete, onCancel, showToast }) => {
   const [title, setTitle] = useState('');
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
   const { t } = useLanguage();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,9 +68,31 @@ const Uploader: React.FC<UploaderProps> = ({ onUploadComplete, onCancel }) => {
       onUploadComplete(t('uploader.toast.saved', { title }));
     } catch (error) {
       console.error("Upload failed", error);
-      alert(t('uploader.toast.saveFailed'));
+      showToast(t('uploader.toast.saveFailed'), 'error');
     } finally {
       setIsUploading(false);
+    }
+  };
+  
+  const handleGenerateTitle = async () => {
+    const imageSource = coverFile || files[0];
+    if (!imageSource) {
+      showToast(t('uploader.generateTitle.toast.noImage'), 'info');
+      return;
+    }
+    
+    setIsGeneratingTitle(true);
+    showToast(t('uploader.generateTitle.toast.generating'), 'info');
+    
+    try {
+      const generatedTitle = await generateAiTitle(imageSource);
+      setTitle(generatedTitle);
+      showToast(t('uploader.generateTitle.toast.success'), 'success');
+    } catch (error) {
+      console.error("AI Title Generation Failed", error);
+      showToast(t('uploader.generateTitle.toast.failed'), 'error');
+    } finally {
+      setIsGeneratingTitle(false);
     }
   };
 
@@ -86,14 +112,29 @@ const Uploader: React.FC<UploaderProps> = ({ onUploadComplete, onCancel }) => {
           <div className="space-y-6">
             <div className="space-y-3">
               <label className="text-sm font-semibold text-indigo-300 uppercase tracking-wide">{t('uploader.comicTitleLabel')}</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t('uploader.comicTitlePlaceholder')}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-xl text-white placeholder:text-white/20 focus:ring-2 focus:ring-indigo-500/50 focus:bg-white/10 outline-none transition-all shadow-inner"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={t('uploader.comicTitlePlaceholder')}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-xl text-white placeholder:text-white/20 focus:ring-2 focus:ring-indigo-500/50 focus:bg-white/10 outline-none transition-all shadow-inner pr-16"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateTitle}
+                  disabled={isGeneratingTitle || (!coverFile && files.length === 0)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-indigo-500/20 rounded-full text-indigo-300 active:bg-indigo-500/40 disabled:opacity-50 disabled:cursor-not-allowed group transition-all"
+                  aria-label={t('uploader.generateTitle.button')}
+                >
+                  {isGeneratingTitle ? (
+                      <Loader2 size={20} className="animate-spin" />
+                  ) : (
+                      <Sparkles size={20} className="group-hover:scale-110 group-active:scale-90 transition-transform" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">

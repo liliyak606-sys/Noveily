@@ -148,6 +148,7 @@ const AppContent: React.FC = () => {
           <Uploader 
             onUploadComplete={handleUploadComplete} 
             onCancel={handleCloseView} 
+            showToast={showToast}
           />
         </div>
       )}

@@ -54,6 +54,44 @@ export const getAiPageAnalysis = async (imageBlob: Blob, prompt: string): Promis
   }
 };
 
+export const generateAiTitle = async (imageBlob: Blob): Promise<string> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API Key is missing.");
+  }
+  
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const base64Data = await blobToBase64(imageBlob);
+    const prompt = "Analyze this comic book cover art. Suggest a short, catchy, and fitting title for the comic. Respond with only the title text, with no special formatting like markdown or quotes.";
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: imageBlob.type || 'image/png',
+            },
+          },
+          { text: prompt },
+        ],
+      },
+    });
+
+    const generatedTitle = response.text?.trim();
+    if (!generatedTitle) {
+      throw new Error("AI did not return a title.");
+    }
+    // Remove potential quotes from the AI response
+    return generatedTitle.replace(/^"|"$/g, '');
+  } catch (error) {
+    console.error("Gemini API Error (Title Generation):", error);
+    throw new Error("Failed to generate title with AI. Please try again.");
+  }
+};
+
+
 export const searchComicCovers = async (comics: Comic[], query: string): Promise<Comic[]> => {
     if (!process.env.API_KEY) throw new Error("API Key is missing.");
 
